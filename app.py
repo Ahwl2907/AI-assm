@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import re
-from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
@@ -23,7 +23,7 @@ def preprocess_text(text):
     text = re.sub(r'<.*?>', '', str(text))
     text = re.sub(r'[^a-zA-Z\s]', '', text)
     text = text.lower()
-    stop_words = set(stopwords.words('english'))
+    stop_words = set(ENGLISH_STOP_WORDS)
     lemmatizer = WordNetLemmatizer()
     tokens = text.split()
     tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
@@ -73,3 +73,4 @@ if uploaded_file:
     st.dataframe(results_df.head(20))
 else:
     st.info("Please upload the Starbucks reviews CSV file to begin.")
+
