@@ -61,7 +61,6 @@ def train_and_evaluate(data):
     }
     return svm, metrics, vectorizer, X_test, y_test, y_pred
 
-@st.cache_data
 def predict_with_confidence(model, vectorized_input, threshold=0.5):
     decision_scores = model.decision_function(vectorized_input)
     # For binary classification this is one-dimensional; for multi-class use max margin
@@ -125,4 +124,5 @@ if uploaded_file:
 
 else:
     st.info("Please upload the Starbucks reviews CSV file to begin.")
+
 
