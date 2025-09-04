@@ -8,6 +8,7 @@ from sklearn.svm import LinearSVC
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from nltk.stem import WordNetLemmatizer
+from scipy.special import softmax
 
 # NLTK downloads (for lemmatizer)
 nltk.download('wordnet')
@@ -21,7 +22,6 @@ lemmatizer = WordNetLemmatizer()
 @st.cache_data
 def load_data(path):
     df = pd.read_csv(path)
-    # Drop rows where Review is missing to avoid None in samples
     df = df.dropna(subset=['Review'])
     # Label sentiment: 0=Negative, 2=Neutral, 1=Positive
     df['Sentiment'] = df['Rating'].apply(lambda x: 1 if x >= 4 else (0 if x <= 2 else 2))
@@ -61,18 +61,13 @@ def train_and_evaluate(data):
     }
     return svm, metrics, vectorizer, X_test, y_test, y_pred
 
-# No caching here to avoid unhashable errors
-def predict_with_confidence(model, vectorized_input, threshold=0.5):
-    decision_scores = model.decision_function(vectorized_input)
-    if len(decision_scores.shape) == 1:
-        confidence = abs(decision_scores[0])
-    else:
-        sorted_scores = sorted(decision_scores[0], reverse=True)
-        confidence = sorted_scores[0] - sorted_scores[1]
-    if confidence < threshold:
-        return 2  # Neutral
-    else:
-        return model.predict(vectorized_input)[0]
+# Predict with confidence for all classes
+def predict_with_confidences(model, vectorizer, text):
+    processed = preprocess_text(text)
+    vect = vectorizer.transform([processed])
+    decision_scores = model.decision_function(vect)[0]  # shape (3,)
+    probs = softmax(decision_scores)  # turn into pseudo-probabilities
+    return processed, probs
 
 uploaded_file = st.file_uploader("Upload Starbucks reviews CSV file", type=['csv'])
 
@@ -102,20 +97,18 @@ if uploaded_file:
     user_input = st.text_area("Enter a Starbucks review to predict its sentiment:")
 
     if user_input:
-        def preprocess_single(text):
-            text = re.sub(r'<.*?>', '', str(text))
-            text = re.sub(r'[^a-zA-Z\s]', '', text)
-            text = text.lower()
-            tokens = text.split()
-            tokens = [word for word in tokens if word not in stop_words]
-            tokens = [lemmatizer.lemmatize(word) for word in tokens]
-            return ' '.join(tokens)
+        processed, probs = predict_with_confidences(model, vectorizer, user_input)
+        pred_label = sentiment_labels[np.argmax(probs)]
 
-        user_processed = preprocess_single(user_input)
-        user_vect = vectorizer.transform([user_processed])
-        pred = predict_with_confidence(model, user_vect)
-        st.write("**Predicted Sentiment:**", sentiment_labels.get(pred, "Unknown"))
-        st.write("Cleaned Input:", user_processed)
+        st.write("**Predicted Sentiment:**", pred_label)
+        st.write("Cleaned Input:", processed)
+
+        st.write("### Confidence Scores")
+        conf_df = pd.DataFrame({
+            "Sentiment": [sentiment_labels[i] for i in range(len(probs))],
+            "Confidence": [f"{p*100:.2f}%" for p in probs]
+        })
+        st.dataframe(conf_df)
 
 else:
     st.info("Please upload the Starbucks reviews CSV file to begin.")
