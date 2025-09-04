@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from nltk.stem import WordNetLemmatizer
 
-# Download NLTK data (run once locally or in environment)
+# NLTK downloads (for lemmatizer)
 nltk.download('wordnet')
 nltk.download('omw-1.4')
 
@@ -21,6 +21,9 @@ lemmatizer = WordNetLemmatizer()
 @st.cache_data
 def load_data(path):
     df = pd.read_csv(path)
+    # Drop rows where Review is missing to avoid None in samples
+    df = df.dropna(subset=['Review'])
+    # Label sentiment: 0=Negative, 2=Neutral, 1=Positive
     df['Sentiment'] = df['Rating'].apply(lambda x: 1 if x >= 4 else (0 if x <= 2 else 2))
     return df
 
@@ -58,12 +61,12 @@ def train_and_evaluate(data):
     }
     return svm, metrics, vectorizer, X_test, y_test, y_pred
 
-# NO caching here because model and input are unhashable
+# No caching here to avoid unhashable errors
 def predict_with_confidence(model, vectorized_input, threshold=0.5):
     decision_scores = model.decision_function(vectorized_input)
-    if len(decision_scores.shape) == 1:  # binary
+    if len(decision_scores.shape) == 1:
         confidence = abs(decision_scores[0])
-    else:  # multi-class margin
+    else:
         sorted_scores = sorted(decision_scores[0], reverse=True)
         confidence = sorted_scores[0] - sorted_scores[1]
     if confidence < threshold:
@@ -85,11 +88,12 @@ if uploaded_file:
     st.json(metrics)
 
     sentiment_labels = {0: "Negative", 1: "Positive", 2: "Neutral"}
+
     results_df = pd.DataFrame({
-        'Review': X_test,
-        'Actual Sentiment': y_test.map(sentiment_labels),
+        'Review': X_test.reset_index(drop=True),
+        'Actual Sentiment': y_test.reset_index(drop=True).map(sentiment_labels),
         'Predicted Sentiment': pd.Series(y_pred).map(sentiment_labels)
-    }).reset_index(drop=True)
+    })
 
     st.write("### Sample Predictions")
     st.dataframe(results_df.head(20))
@@ -112,5 +116,6 @@ if uploaded_file:
         pred = predict_with_confidence(model, user_vect)
         st.write("**Predicted Sentiment:**", sentiment_labels.get(pred, "Unknown"))
         st.write("Cleaned Input:", user_processed)
+
 else:
     st.info("Please upload the Starbucks reviews CSV file to begin.")
