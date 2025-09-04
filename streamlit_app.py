@@ -73,11 +73,17 @@ if uploaded_file:
                     "R": wordnet.ADV}
         return tag_dict.get(tag, wordnet.NOUN)
 
+    #def preprocess(text):
+     #   tokens = text.split()
+      #  tokens = [lemmatizer.lemmatize(word, get_wordnet_pos(word))
+       #           for word in tokens if word not in stop_words]
+        #return ' '.join(tokens)
+
     def preprocess(text):
-        tokens = text.split()
-        tokens = [lemmatizer.lemmatize(word, get_wordnet_pos(word))
-                  for word in tokens if word not in stop_words]
-        return ' '.join(tokens)
+    tokens = text.split()
+    tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+    return ' '.join(tokens)
+
 
     df['Processed_Review'] = df['Cleaned_Review'].apply(preprocess)
 
@@ -153,3 +159,4 @@ if uploaded_file:
         prediction = svm.predict(vec)[0]
         sentiment_label = ['Negative', 'Neutral', 'Positive'][prediction]
         st.success(f"Predicted Sentiment: **{sentiment_label}**")
+
