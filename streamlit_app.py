@@ -115,4 +115,50 @@ if uploaded_file:
     y_pred = svm.predict(X_test_tfidf)
 
     # -------------------------------
-    #
+    # Metrics
+    # -------------------------------
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred, average='macro')
+    recall = recall_score(y_test, y_pred, average='macro')
+    f1 = f1_score(y_test, y_pred, average='macro')
+
+    st.subheader("📈 Classification Report")
+    st.text(classification_report(y_test, y_pred, target_names=['Negative', 'Neutral', 'Positive']))
+
+    # -------------------------------
+    # Confusion Matrix + Metrics Plot
+    # -------------------------------
+    cm = confusion_matrix(y_test, y_pred)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Negative', 'Neutral', 'Positive'])
+    disp.plot(ax=axes[0], cmap=plt.cm.Blues, colorbar=False)
+    axes[0].set_title('Confusion Matrix')
+
+    metrics = {
+        'Accuracy': accuracy,
+        'Precision (macro)': precision,
+        'Recall (macro)': recall,
+        'F1 Score (macro)': f1
+    }
+
+    axes[1].bar(metrics.keys(), metrics.values(), color=['blue', 'green', 'red', 'purple'])
+    axes[1].set_ylim(0, 1)
+    axes[1].set_title('Performance Metrics')
+    axes[1].set_ylabel('Score')
+    for i, v in enumerate(metrics.values()):
+        axes[1].text(i, v + 0.03, f"{v:.2f}", ha='center', fontsize=12)
+
+    st.pyplot(fig)
+
+    # -------------------------------
+    # Try Custom Review
+    # -------------------------------
+    st.subheader("📝 Test Your Own Review")
+    user_input = st.text_area("Enter a review text:")
+    if user_input:
+        processed = preprocess(clean_text(user_input))
+        vec = tfidf.transform([processed])
+        prediction = svm.predict(vec)[0]
+        sentiment_label = ['Negative', 'Neutral', 'Positive'][prediction]
+        st.success(f"Predicted Sentiment: **{sentiment_label}**")
