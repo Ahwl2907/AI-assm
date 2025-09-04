@@ -107,20 +107,21 @@ if uploaded_file:
     user_input = st.text_area("Enter a Starbucks review to predict its sentiment:")
 
     if user_input:
-    processed, probs, pred_idx = predict_with_confidences(model, vectorizer, user_input)
-    pred_label = sentiment_labels[pred_idx]
-
-    st.write("**Predicted Sentiment:**", pred_label)
-    st.write("Cleaned Input:", processed)
-
-    st.write("### Confidence Scores")
-    conf_df = pd.DataFrame({
-        "Sentiment": [sentiment_labels[i] for i in range(len(probs))],
-        "Confidence": [f"{p*100:.2f}%" for p in probs]
-    })
-    st.dataframe(conf_df)
+        processed, probs, pred_idx = predict_with_confidences(model, vectorizer, user_input)
+        pred_label = sentiment_labels[pred_idx]
+    
+        st.write("**Predicted Sentiment:**", pred_label)
+        st.write("Cleaned Input:", processed)
+    
+        st.write("### Confidence Scores")
+        conf_df = pd.DataFrame({
+            "Sentiment": [sentiment_labels[i] for i in range(len(probs))],
+            "Confidence": [f"{p*100:.2f}%" for p in probs]
+        })
+        st.dataframe(conf_df)
 
 
 else:
     st.info("Please upload the Starbucks reviews CSV file to begin.")
+
 
