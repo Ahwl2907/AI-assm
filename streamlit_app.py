@@ -4,8 +4,9 @@ import re
 import matplotlib.pyplot as plt
 import streamlit as st
 
-from nltk.corpus import stopwords
+from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
+from nltk import pos_tag
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
@@ -14,12 +15,11 @@ from sklearn.metrics import (
     classification_report, confusion_matrix, ConfusionMatrixDisplay
 )
 
-# Download NLTK resources (only runs once)
-import nltk
+# Download NLTK resources
 nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True)
 nltk.download('omw-1.4', quiet=True)
-
+nltk.download('averaged_perceptron_tagger', quiet=True)
 
 # -------------------------------
 # Streamlit UI
@@ -27,7 +27,7 @@ nltk.download('omw-1.4', quiet=True)
 st.title("📊 Starbucks Reviews Sentiment Analysis (SVM)")
 st.markdown("Negative = 0 | Neutral = 1 | Positive = 2")
 
-# File upload (instead of hardcoding path)
+# File upload
 uploaded_file = st.file_uploader("Upload your Starbucks Reviews CSV", type="csv")
 
 if uploaded_file:
@@ -49,7 +49,7 @@ if uploaded_file:
     # Clean text
     def clean_text(text):
         text = re.sub(r'<.*?>', '', str(text))  # Remove HTML tags
-        text = re.sub(r'[^a-zA-Z\s]', '', text)  # Keep letters/spaces only
+        text = re.sub(r'[^a-zA-Z\s]', '', text)  # Keep only letters/spaces
         return text.lower()
 
     df['Cleaned_Review'] = df['Review'].apply(clean_text)
@@ -58,9 +58,21 @@ if uploaded_file:
     stop_words = set(stopwords.words('english'))
     lemmatizer = WordNetLemmatizer()
 
+    def get_wordnet_pos(word):
+        """Map POS tag to first character lemmatize() accepts"""
+        tag = pos_tag([word])[0][1][0].upper()
+        tag_dict = {"J": wordnet.ADJ,
+                    "N": wordnet.NOUN,
+                    "V": wordnet.VERB,
+                    "R": wordnet.ADV}
+        return tag_dict.get(tag, wordnet.NOUN)
+
     def preprocess(text):
         tokens = text.split()
-        tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+        tokens = [
+            lemmatizer.lemmatize(word, get_wordnet_pos(word))
+            for word in tokens if word not in stop_words
+        ]
         return ' '.join(tokens)
 
     df['Processed_Review'] = df['Cleaned_Review'].apply(preprocess)
@@ -100,7 +112,7 @@ if uploaded_file:
     st.text(classification_report(y_test, y_pred, target_names=['Negative', 'Neutral', 'Positive']))
 
     # -------------------------------
-    # Confusion Matrix
+    # Confusion Matrix + Metrics Chart
     # -------------------------------
     cm = confusion_matrix(y_test, y_pred)
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
@@ -109,14 +121,12 @@ if uploaded_file:
     disp.plot(ax=axes[0], cmap=plt.cm.Blues, colorbar=False)
     axes[0].set_title('Confusion Matrix')
 
-    # Metrics bar chart
     metrics = {
         'Accuracy': accuracy,
         'Precision (macro)': precision,
         'Recall (macro)': recall,
         'F1 Score (macro)': f1
     }
-
     axes[1].bar(metrics.keys(), metrics.values(), color=['blue', 'green', 'red', 'purple'])
     axes[1].set_ylim(0, 1)
     axes[1].set_title('Performance Metrics')
@@ -132,9 +142,11 @@ if uploaded_file:
     st.subheader("📝 Test Your Own Review")
     user_input = st.text_area("Enter a review text:")
     if user_input:
+        if len(user_input.split()) < 3:
+            st.warning("⚠️ Short reviews may give unreliable predictions.")
+
         processed = preprocess(clean_text(user_input))
         vec = tfidf.transform([processed])
         prediction = svm.predict(vec)[0]
         sentiment_label = ['Negative', 'Neutral', 'Positive'][prediction]
         st.success(f"Predicted Sentiment: **{sentiment_label}**")
-
