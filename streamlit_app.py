@@ -21,7 +21,6 @@ from sklearn.metrics import (
 nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True)
 nltk.download('omw-1.4', quiet=True)
-# Newer NLTK versions renamed the tagger
 nltk.download('averaged_perceptron_tagger_eng', quiet=True)
 
 # -------------------------------
@@ -108,9 +107,9 @@ if uploaded_file:
     X_test_tfidf = tfidf.transform(X_test)
 
     # -------------------------------
-    # Train SVM Model
+    # Train SVM Model (Balanced)
     # -------------------------------
-    svm = LinearSVC()
+    svm = LinearSVC(class_weight='balanced')
     svm.fit(X_train_tfidf, y_train)
     y_pred = svm.predict(X_test_tfidf)
 
@@ -124,6 +123,11 @@ if uploaded_file:
 
     st.subheader("📈 Classification Report")
     st.text(classification_report(y_test, y_pred, target_names=['Negative', 'Neutral', 'Positive']))
+
+    # Show prediction distribution
+    st.subheader("📊 Prediction Distribution")
+    pred_counts = pd.Series(y_pred).value_counts().rename({0: "Negative", 1: "Neutral", 2: "Positive"})
+    st.bar_chart(pred_counts)
 
     # -------------------------------
     # Confusion Matrix + Metrics Plot
@@ -162,3 +166,17 @@ if uploaded_file:
         prediction = svm.predict(vec)[0]
         sentiment_label = ['Negative', 'Neutral', 'Positive'][prediction]
         st.success(f"Predicted Sentiment: **{sentiment_label}**")
+
+    # -------------------------------
+    # Neutral Check Helper
+    # -------------------------------
+    st.subheader("🔎 Quick Neutral Check")
+    sample_neutral = ["It was okay, nothing special.",
+                      "The service was fine, not good, not bad.",
+                      "Average experience overall."]
+    if st.button("Test Neutral Samples"):
+        for s in sample_neutral:
+            processed = preprocess(clean_text(s))
+            vec = tfidf.transform([processed])
+            pred = svm.predict(vec)[0]
+            st.write(f"'{s}' → Predicted: **{['Negative','Neutral','Positive'][pred]}**")
