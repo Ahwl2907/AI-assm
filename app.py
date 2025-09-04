@@ -15,8 +15,9 @@ stop_words = set(ENGLISH_STOP_WORDS)
 @st.cache_data
 def load_data(path):
     df = pd.read_csv(path)
-    df = df[df['Rating'] != 3]  # Remove neutral reviews
-    df['Sentiment'] = np.where(df['Rating'] >= 4, 1, 0)  # 1=positive, 0=negative
+    #df = df[df['Rating'] != 3]  # Remove neutral reviews
+    #df['Sentiment'] = np.where(df['Rating'] >= 4, 1, 0)  # 1=positive, 0=negative
+    df['Sentiment'] = df['Rating'].apply(lambda x: 1 if x >= 4 else (0 if x <= 2 else 2))
     return df
 
 @st.cache_data
@@ -47,9 +48,9 @@ def train_and_evaluate(data):
     
     metrics = {
         'Accuracy': accuracy_score(y_test, y_pred),
-        'Precision': precision_score(y_test, y_pred),
-        'Recall': recall_score(y_test, y_pred),
-        'F1 Score': f1_score(y_test, y_pred)
+        'Precision': precision_score(y_test, y_pred, average='weighted', zero_division=0),
+        'Recall': recall_score(y_test, y_pred, average='weighted', zero_division=0),
+        'F1 Score': f1_score(y_test, y_pred, average='weighted', zero_division=0)
     }
     return svm, metrics, vectorizer, X_test, y_test, y_pred
 
@@ -100,7 +101,7 @@ if user_input:
     pred = model.predict(user_vect)[0]
     
     # Map predicted label to text
-    sentiment_map = {1: "Positive", 0: "Negative"}
+    sentiment_map = {1: "Positive", 0: "Negative", 2: "Neutral"}
     
     # Display prediction
     st.write("**Predicted Sentiment:**", sentiment_map.get(pred, "Unknown"))
@@ -110,4 +111,5 @@ if user_input:
     
 else:
     st.info("Please upload the Starbucks reviews CSV file to begin.")
+
 
