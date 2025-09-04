@@ -7,6 +7,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import nltk
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+from nltk.stem import WordNetLemmatizer
+lemmatizer = WordNetLemmatizer()
+
+
 
 st.title("Starbucks Reviews Sentiment Analysis (SVM) - 3 Classes (Neg/Neu/Pos)")
 
@@ -26,6 +33,8 @@ def preprocess_text(text):
     text = text.lower()
     tokens = text.split()
     tokens = [word for word in tokens if word not in stop_words]
+    # Lemmatize each token
+    tokens = [lemmatizer.lemmatize(word) for word in tokens]
     return ' '.join(tokens)
 
 @st.cache_data
@@ -51,6 +60,21 @@ def train_and_evaluate(data):
         'F1 Score': f1_score(y_test, y_pred, average='weighted', zero_division=0)
     }
     return svm, metrics, vectorizer, X_test, y_test, y_pred
+
+@st.cache_data
+def predict_with_confidence(model, vectorized_input, threshold=0.5):
+    decision_scores = model.decision_function(vectorized_input)
+    # For binary classification this is one-dimensional; for multi-class use max margin
+    if len(decision_scores.shape) == 1:
+        confidence = abs(decision_scores[0])  # distance from hyperplane
+    else:
+        confidence = max(decision_scores[0]) - sorted(decision_scores[0])[-2]  # margin between top 2 classes
+    
+    if confidence < threshold:
+        return 2  # Neutral label
+    else:
+        return model.predict(vectorized_input)[0]
+
 
 # Sidebar file uploader
 uploaded_file = st.file_uploader("Upload Starbucks reviews CSV file", type=['csv'])
@@ -95,9 +119,10 @@ if uploaded_file:
 
         user_processed = preprocess_single(user_input)
         user_vect = vectorizer.transform([user_processed])
-        pred = model.predict(user_vect)[0]
+        pred = predict_with_confidence(model, user_vect)
         st.write("**Predicted Sentiment:**", sentiment_labels.get(pred, "Unknown"))
         st.write("Cleaned Input:", user_processed)
 
 else:
     st.info("Please upload the Starbucks reviews CSV file to begin.")
+
