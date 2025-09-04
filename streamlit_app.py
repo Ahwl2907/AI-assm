@@ -15,9 +15,11 @@ from sklearn.metrics import (
 )
 
 # Download NLTK resources (only runs once)
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('omw-1.4')
+import nltk
+nltk.download('stopwords', quiet=True)
+nltk.download('wordnet', quiet=True)
+nltk.download('omw-1.4', quiet=True)
+
 
 # -------------------------------
 # Streamlit UI
@@ -135,3 +137,4 @@ if uploaded_file:
         prediction = svm.predict(vec)[0]
         sentiment_label = ['Negative', 'Neutral', 'Positive'][prediction]
         st.success(f"Predicted Sentiment: **{sentiment_label}**")
+
