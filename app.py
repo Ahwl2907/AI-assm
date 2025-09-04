@@ -62,12 +62,22 @@ def train_and_evaluate(data):
     return svm, metrics, vectorizer, X_test, y_test, y_pred
 
 # Predict with confidence for all classes
-def predict_with_confidences(model, vectorizer, text):
+def predict_with_confidences(model, vectorizer, text, threshold=0.4):
     processed = preprocess_text(text)
     vect = vectorizer.transform([processed])
     decision_scores = model.decision_function(vect)[0]  # shape (3,)
-    probs = softmax(decision_scores)  # turn into pseudo-probabilities
-    return processed, probs
+    probs = softmax(decision_scores)  # pseudo-probabilities
+
+    # Apply threshold rule
+    top_idx = np.argmax(probs)
+    top_conf = probs[top_idx]
+    if top_conf < threshold:
+        pred_label = 2  # Force Neutral
+    else:
+        pred_label = top_idx
+
+    return processed, probs, pred_label
+
 
 uploaded_file = st.file_uploader("Upload Starbucks reviews CSV file", type=['csv'])
 
@@ -97,18 +107,20 @@ if uploaded_file:
     user_input = st.text_area("Enter a Starbucks review to predict its sentiment:")
 
     if user_input:
-        processed, probs = predict_with_confidences(model, vectorizer, user_input)
-        pred_label = sentiment_labels[np.argmax(probs)]
+    processed, probs, pred_idx = predict_with_confidences(model, vectorizer, user_input)
+    pred_label = sentiment_labels[pred_idx]
 
-        st.write("**Predicted Sentiment:**", pred_label)
-        st.write("Cleaned Input:", processed)
+    st.write("**Predicted Sentiment:**", pred_label)
+    st.write("Cleaned Input:", processed)
 
-        st.write("### Confidence Scores")
-        conf_df = pd.DataFrame({
-            "Sentiment": [sentiment_labels[i] for i in range(len(probs))],
-            "Confidence": [f"{p*100:.2f}%" for p in probs]
-        })
-        st.dataframe(conf_df)
+    st.write("### Confidence Scores")
+    conf_df = pd.DataFrame({
+        "Sentiment": [sentiment_labels[i] for i in range(len(probs))],
+        "Confidence": [f"{p*100:.2f}%" for p in probs]
+    })
+    st.dataframe(conf_df)
+
 
 else:
     st.info("Please upload the Starbucks reviews CSV file to begin.")
+
