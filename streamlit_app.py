@@ -21,6 +21,7 @@ from sklearn.metrics import (
 nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True)
 nltk.download('omw-1.4', quiet=True)
+# Newer NLTK versions renamed the tagger
 nltk.download('averaged_perceptron_tagger_eng', quiet=True)
 
 # -------------------------------
@@ -29,7 +30,7 @@ nltk.download('averaged_perceptron_tagger_eng', quiet=True)
 st.title("📊 Starbucks Reviews Sentiment Analysis (SVM)")
 st.markdown("Negative = 0 | Neutral = 1 | Positive = 2")
 
-# File upload (instead of hardcoding path)
+# File upload
 uploaded_file = st.file_uploader("Upload your Starbucks Reviews CSV", type="csv")
 
 if uploaded_file:
@@ -59,7 +60,7 @@ if uploaded_file:
     df['Cleaned_Review'] = df['Review'].apply(clean_text)
 
     # -------------------------------
-    # POS-aware Lemmatization
+    # Preprocessing (POS-aware with fallback)
     # -------------------------------
     stop_words = set(stopwords.words('english'))
     lemmatizer = WordNetLemmatizer()
@@ -73,17 +74,20 @@ if uploaded_file:
                     "R": wordnet.ADV}
         return tag_dict.get(tag, wordnet.NOUN)
 
-    #def preprocess(text):
-     #   tokens = text.split()
-      #  tokens = [lemmatizer.lemmatize(word, get_wordnet_pos(word))
-       #           for word in tokens if word not in stop_words]
-        #return ' '.join(tokens)
-
     def preprocess(text):
         tokens = text.split()
-        tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
-        return ' '.join(tokens)
-
+        processed_tokens = []
+        for word in tokens:
+            if word in stop_words:
+                continue
+            try:
+                pos = get_wordnet_pos(word)  # Try POS-aware lemmatization
+                lemma = lemmatizer.lemmatize(word, pos)
+            except Exception:
+                # Fallback if POS tagger fails
+                lemma = lemmatizer.lemmatize(word)
+            processed_tokens.append(lemma)
+        return ' '.join(processed_tokens)
 
     df['Processed_Review'] = df['Cleaned_Review'].apply(preprocess)
 
@@ -111,53 +115,4 @@ if uploaded_file:
     y_pred = svm.predict(X_test_tfidf)
 
     # -------------------------------
-    # Metrics
-    # -------------------------------
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, average='macro')
-    recall = recall_score(y_test, y_pred, average='macro')
-    f1 = f1_score(y_test, y_pred, average='macro')
-
-    st.subheader("📈 Classification Report")
-    st.text(classification_report(y_test, y_pred, target_names=['Negative', 'Neutral', 'Positive']))
-
-    # -------------------------------
-    # Confusion Matrix
-    # -------------------------------
-    cm = confusion_matrix(y_test, y_pred)
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Negative', 'Neutral', 'Positive'])
-    disp.plot(ax=axes[0], cmap=plt.cm.Blues, colorbar=False)
-    axes[0].set_title('Confusion Matrix')
-
-    # Metrics bar chart
-    metrics = {
-        'Accuracy': accuracy,
-        'Precision (macro)': precision,
-        'Recall (macro)': recall,
-        'F1 Score (macro)': f1
-    }
-
-    axes[1].bar(metrics.keys(), metrics.values(), color=['blue', 'green', 'red', 'purple'])
-    axes[1].set_ylim(0, 1)
-    axes[1].set_title('Performance Metrics')
-    axes[1].set_ylabel('Score')
-    for i, v in enumerate(metrics.values()):
-        axes[1].text(i, v + 0.03, f"{v:.2f}", ha='center', fontsize=12)
-
-    st.pyplot(fig)
-
-    # -------------------------------
-    # Try Custom Review
-    # -------------------------------
-    st.subheader("📝 Test Your Own Review")
-    user_input = st.text_area("Enter a review text:")
-    if user_input:
-        processed = preprocess(clean_text(user_input))
-        vec = tfidf.transform([processed])
-        prediction = svm.predict(vec)[0]
-        sentiment_label = ['Negative', 'Neutral', 'Positive'][prediction]
-        st.success(f"Predicted Sentiment: **{sentiment_label}**")
-
-
+    #
