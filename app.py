@@ -75,5 +75,39 @@ if uploaded_file:
     
     st.write("### Sample Predictions")
     st.dataframe(results_df.head(20))
+
+    # New area for user input text
+st.write("### Try Your Own Review:")
+user_input = st.text_area("Enter a Starbucks review to predict its sentiment:")
+
+if user_input:
+    # Preprocess input text same as training data
+    def preprocess_single(text):
+        import re
+        text = re.sub(r'<.*?>', '', str(text))
+        text = re.sub(r'[^a-zA-Z\s]', '', text)
+        text = text.lower()
+        tokens = text.split()
+        tokens = [word for word in tokens if word not in stop_words]
+        return ' '.join(tokens)
+    
+    user_processed = preprocess_single(user_input)
+    
+    # Vectorize the processed input text
+    user_vect = vectorizer.transform([user_processed])
+    
+    # Predict sentiment: 1=Positive, 0=Negative (Neutral not used in training)
+    pred = model.predict(user_vect)[0]
+    
+    # Map predicted label to text
+    sentiment_map = {1: "Positive", 0: "Negative"}
+    
+    # Display prediction
+    st.write("**Predicted Sentiment:**", sentiment_map.get(pred, "Unknown"))
+
+    # Optionally show the cleaned and processed versions too
+    st.write("Cleaned Input:", user_processed)
+    
 else:
     st.info("Please upload the Starbucks reviews CSV file to begin.")
+
