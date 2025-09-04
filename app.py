@@ -1,127 +1,137 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import re
 import nltk
-from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
-from sklearn.svm import LinearSVC
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from nltk.stem import WordNetLemmatizer
-from scipy.special import softmax
+import pandas as pd
+import re
+import matplotlib.pyplot as plt
+import streamlit as st
 
-# NLTK downloads (for lemmatizer)
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import LinearSVC
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    classification_report, confusion_matrix, ConfusionMatrixDisplay
+)
+
+# Download NLTK resources (only runs once)
+nltk.download('stopwords')
 nltk.download('wordnet')
 nltk.download('omw-1.4')
 
-st.title("Starbucks Reviews Sentiment Analysis (SVM) - 3 Classes")
+# -------------------------------
+# Streamlit UI
+# -------------------------------
+st.title("📊 Starbucks Reviews Sentiment Analysis (SVM)")
+st.markdown("Negative = 0 | Neutral = 1 | Positive = 2")
 
-stop_words = set(ENGLISH_STOP_WORDS)
-lemmatizer = WordNetLemmatizer()
+# File upload (instead of hardcoding path)
+uploaded_file = st.file_uploader("Upload your Starbucks Reviews CSV", type="csv")
 
-@st.cache_data
-def load_data(path):
-    df = pd.read_csv(path)
-    df = df.dropna(subset=['Review'])
-    # Label sentiment: 0=Negative, 2=Neutral, 1=Positive
-    df['Sentiment'] = df['Rating'].apply(lambda x: 1 if x >= 4 else (0 if x <= 2 else 2))
-    return df
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
 
-@st.cache_data
-def preprocess_text(text):
-    text = re.sub(r'<.*?>', '', str(text))
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
-    text = text.lower()
-    tokens = text.split()
-    tokens = [word for word in tokens if word not in stop_words]
-    tokens = [lemmatizer.lemmatize(word) for word in tokens]
-    return ' '.join(tokens)
+    # -------------------------------
+    # Preprocessing
+    # -------------------------------
+    def label_sentiment(rating):
+        if rating <= 2:
+            return 0  # Negative
+        elif rating == 3:
+            return 1  # Neutral
+        else:
+            return 2  # Positive
 
-@st.cache_data
-def train_and_evaluate(data):
-    data['Processed_Review'] = data['Review'].apply(preprocess_text)
-    X = data['Processed_Review']
-    y = data['Sentiment']
+    df['Sentiment'] = df['Rating'].apply(label_sentiment)
+
+    # Clean text
+    def clean_text(text):
+        text = re.sub(r'<.*?>', '', str(text))  # Remove HTML tags
+        text = re.sub(r'[^a-zA-Z\s]', '', text)  # Keep letters/spaces only
+        return text.lower()
+
+    df['Cleaned_Review'] = df['Review'].apply(clean_text)
+
+    # Stopwords + Lemmatization
+    stop_words = set(stopwords.words('english'))
+    lemmatizer = WordNetLemmatizer()
+
+    def preprocess(text):
+        tokens = text.split()
+        tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+        return ' '.join(tokens)
+
+    df['Processed_Review'] = df['Cleaned_Review'].apply(preprocess)
+
+    st.subheader("📌 Data Preview")
+    st.write(df.head())
+
+    # -------------------------------
+    # Train/Test Split + TF-IDF
+    # -------------------------------
+    X = df['Processed_Review']
+    y = df['Sentiment']
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
-    vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
-    X_train_tfidf = vectorizer.fit_transform(X_train)
-    X_test_tfidf = vectorizer.transform(X_test)
 
+    tfidf = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+    X_train_tfidf = tfidf.fit_transform(X_train)
+    X_test_tfidf = tfidf.transform(X_test)
+
+    # -------------------------------
+    # Train SVM Model
+    # -------------------------------
     svm = LinearSVC()
     svm.fit(X_train_tfidf, y_train)
     y_pred = svm.predict(X_test_tfidf)
 
+    # -------------------------------
+    # Metrics
+    # -------------------------------
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred, average='macro')
+    recall = recall_score(y_test, y_pred, average='macro')
+    f1 = f1_score(y_test, y_pred, average='macro')
+
+    st.subheader("📈 Classification Report")
+    st.text(classification_report(y_test, y_pred, target_names=['Negative', 'Neutral', 'Positive']))
+
+    # -------------------------------
+    # Confusion Matrix
+    # -------------------------------
+    cm = confusion_matrix(y_test, y_pred)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Negative', 'Neutral', 'Positive'])
+    disp.plot(ax=axes[0], cmap=plt.cm.Blues, colorbar=False)
+    axes[0].set_title('Confusion Matrix')
+
+    # Metrics bar chart
     metrics = {
-        'Accuracy': accuracy_score(y_test, y_pred),
-        'Precision': precision_score(y_test, y_pred, average='weighted', zero_division=0),
-        'Recall': recall_score(y_test, y_pred, average='weighted', zero_division=0),
-        'F1 Score': f1_score(y_test, y_pred, average='weighted', zero_division=0)
+        'Accuracy': accuracy,
+        'Precision (macro)': precision,
+        'Recall (macro)': recall,
+        'F1 Score (macro)': f1
     }
-    return svm, metrics, vectorizer, X_test, y_test, y_pred
 
-# Predict with confidence for all classes
-def predict_with_confidences(model, vectorizer, text, threshold=0.4):
-    processed = preprocess_text(text)
-    vect = vectorizer.transform([processed])
-    decision_scores = model.decision_function(vect)[0]  # shape (3,)
-    probs = softmax(decision_scores)  # pseudo-probabilities
+    axes[1].bar(metrics.keys(), metrics.values(), color=['blue', 'green', 'red', 'purple'])
+    axes[1].set_ylim(0, 1)
+    axes[1].set_title('Performance Metrics')
+    axes[1].set_ylabel('Score')
+    for i, v in enumerate(metrics.values()):
+        axes[1].text(i, v + 0.03, f"{v:.2f}", ha='center', fontsize=12)
 
-    # Apply threshold rule
-    top_idx = np.argmax(probs)
-    top_conf = probs[top_idx]
-    if top_conf < threshold:
-        pred_label = 2  # Force Neutral
-    else:
-        pred_label = top_idx
+    st.pyplot(fig)
 
-    return processed, probs, pred_label
-
-
-uploaded_file = st.file_uploader("Upload Starbucks reviews CSV file", type=['csv'])
-
-if uploaded_file:
-    data = load_data(uploaded_file)
-    st.write("### Raw Data Sample")
-    st.dataframe(data.head())
-
-    st.write("### Training and Evaluating SVM Model...")
-    model, metrics, vectorizer, X_test, y_test, y_pred = train_and_evaluate(data)
-
-    st.write("### Evaluation Metrics")
-    st.json(metrics)
-
-    sentiment_labels = {0: "Negative", 1: "Positive", 2: "Neutral"}
-
-    results_df = pd.DataFrame({
-        'Review': X_test.reset_index(drop=True),
-        'Actual Sentiment': y_test.reset_index(drop=True).map(sentiment_labels),
-        'Predicted Sentiment': pd.Series(y_pred).map(sentiment_labels)
-    })
-
-    st.write("### Sample Predictions")
-    st.dataframe(results_df.head(20))
-
-    st.write("### Try Your Own Review:")
-    user_input = st.text_area("Enter a Starbucks review to predict its sentiment:")
-
+    # -------------------------------
+    # Try Custom Review
+    # -------------------------------
+    st.subheader("📝 Test Your Own Review")
+    user_input = st.text_area("Enter a review text:")
     if user_input:
-        processed, probs, pred_idx = predict_with_confidences(model, vectorizer, user_input)
-        pred_label = sentiment_labels[pred_idx]
-    
-        st.write("**Predicted Sentiment:**", pred_label)
-        st.write("Cleaned Input:", processed)
-    
-        st.write("### Confidence Scores")
-        conf_df = pd.DataFrame({
-            "Sentiment": [sentiment_labels[i] for i in range(len(probs))],
-            "Confidence": [f"{p*100:.2f}%" for p in probs]
-        })
-        st.dataframe(conf_df)
-
-
-else:
-    st.info("Please upload the Starbucks reviews CSV file to begin.")
-
-
+        processed = preprocess(clean_text(user_input))
+        vec = tfidf.transform([processed])
+        prediction = svm.predict(vec)[0]
+        sentiment_label = ['Negative', 'Neutral', 'Positive'][prediction]
+        st.success(f"Predicted Sentiment: **{sentiment_label}**")
